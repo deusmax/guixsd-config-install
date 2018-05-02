@@ -13,6 +13,9 @@
    :                    -enable-kvm -m 4096             \
    :                    guixsd-vm-image-0.14.0.x86_64-linux.2.img
 
+   The first time you login as =root=, without a password. Make sure to
+   immediately set a password for =root= using the =passwd= command.
+   
    The image disk size (partitions) needs be increased for the system to have
    enough space.
 *** Resize image file
