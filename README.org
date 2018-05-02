@@ -1,0 +1,205 @@
+* Intro
+  This repository has my note configuration, installation and other notes on using the GuixSD Linux Distro. 
+  This is not part of Guix(SD), these are just my notes.
+* Step-by-Step, Installation
+  Configuring an GuixSD Qemu image to run GNOME.
+  
+  This document gives step-by-step instructions for setting up and configuring a
+  GuixSD system on a  Virtual Machine image for QEMU. Get your QEMU image from the
+  [[https://www.gnu.org/software/guix/download/][GuixSD download page]].
+** Running the QEMU VM
+   Latest command to run the GuixSD VM:
+   : qemu-system-x86_64 -net user -net nic,model=virtio \
+   :                    -enable-kvm -m 4096             \
+   :                    guixsd-vm-image-0.14.0.x86_64-linux.2.img
+
+   The image disk size (partitions) needs be increased for the system to have
+   enough space.
+*** Resize image file
+    Before running the qemu vm, the image needs some free space added.
+    For a peek into the image partitions (see https://gist.github.com/mettacrawler):
+    : virt-filesystems -a qemu-linux.img --long --extra --all
+
+    # To increase the image size:
+    # : qemu-img resize qemu-linux.img +10G
+
+    To increase the =sda1= partition and expand it to take up all the new space:
+    : virt-resize --resize /dev/sda1=+12G --expand /dev/sda2 olddisk.img newdisk.img
+** Config misc
+   At this point I like to have a dvorak keyboard.
+   : loadkeys dvorak
+*** Networking
+    Section =6.1.4.2=: Use the interface from the first listing.
+    : ifconfig -a
+    : ifconfig eth0 up
+
+    Get an IP:
+    : dhclient -v eth0
+*** ssh
+    :PROPERTIES:
+    :ID:       2d490671-768f-4f36-b4fc-430ab3140df7
+    :END:
+    In order to connect or copy files to the VM, we need to add a SSH server. See
+    Guix manual section on [[https://www.gnu.org/software/guix/manual/html_node/Running-GuixSD-in-a-VM.html#Connecting-Through-SSH][Connecting Through SSH]]. We have a choice of ssh
+    servers:
+    1. =dropbear=: a light ssh server and client.
+    2. =sshd=: the ssh server from the OpenSSH suit
+    3. =lsh=: the Gnu ssh server
+
+    The Guix manual states that lsh does not boot unsupervised and I didn't look
+    into it any further.
+
+    For ssh access to the qemu VM, the =qemu-system= command should be called with:
+    : -net user,hostfwd=tcp::10022-:22
+
+    Once the ssh server is correctly set up, to connect to the VM root account run:
+    #+NAME: cmd:ssh-to-vm
+    : ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -p 10022  root@<host-ip>
+
+    To copy files to the root account home directory:
+    : scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -P 10022 file_to_copy root@<host-ip>:/root/
+
+    The next sections describe how-to set-up one of the two ssh servers (only one
+    is needed). After the =ssh= server is configured and functioning, the next step is to
+    add it as a =Shepherd= service.
+**** Dropbear SSH
+     *Dropbear* is a light and easy to set up =ssh= server. Unfortunately,
+     =dropbear= does not have a =scp= command. You will need =scp=, if you want to
+     copy any files to the GuixSD vm machine (you will). For this to work, We have
+     to borrow the =scp= client command from the *OpenSSH* package, but will not
+     have to configure the =sshd= daemon.
+
+     Make sure the =dropbear= and =openssh= packages are installed:
+     : guix package -i dropbear openssh
+
+     Create a host key and place it in the =~/.ssh= directory. By default, the
+     =dropbear= server tries to read the host key from the =/etc/dropbear=
+     directory. At this point, I'm not sure about GuixSD policy on the global
+     configuration files, the =/etc= directory[fn:1], so I chose not to touch it and
+     place the host keys in the =/root/.ssh= directory.
+     : dropbearkey -t rsa -f /root/.ssh/dropbear_rsa_host_key 
+
+     To test the =dropbear= server, start the server using the command below. Use
+     options =-E= to display messages to the terminal and =-F= to prevent =daemon=
+     mode (becoming a background job).
+     : dropbear -E -F -r /root/.ssh/dropbear_rsa_host_key 
+
+     You can now test and confirm the connection is working using the =ssh= and
+     =scp= commands above, see [[cmd:ssh-to-vm]], from the host machine. For
+     regular use, the test options of =-E= and =-F= are not needed.
+**** OpenSSH sshd
+     Setting up the *OpenSSH* daemon =sshd= is slightly more complicated. First
+     install the *OpenSSH* package:
+     : guix package -i openssh
+
+     For =sshd= to run, we need to create a /system/ user named =sshd=. Without this
+     system user we will get a /Privilege Separation/ error. Also:
+     1. a group of the same name needs to be created and assigned.
+     2. =GuixSD= vm image, at this configuration stage at least, for creating
+        users has only the low-level utility =useradd= and not the high-level
+        =adduser=.
+
+     To create the =sshd= system user:
+     : useradd --system -U -d /var/empty  \
+     :         -s /run/current-system/profile/sbin/nologin \
+     :         sshd 
+
+     Create a /Host key file/ for =root=:
+     : ssh-keygen -t rsa -f /root/.ssh/ssh_rsa_host_key
+
+     Server =sshd= requires a =sshd_config= file to run. Here is a sample
+     configuration for a quick setup:
+     : Port 22
+     : HostKey /root/.ssh/ssh_rsa_host_key
+     : PidFile /var/run/sshd/sshd.pid
+     : X11Forwarding yes
+     : PermitRootLogin yes
+     : PasswordAuthentication yes
+     : PermitEmptyPasswords yes
+
+     For testing the =sshd= daemon, run it using the command below. Note, the full
+     path to the =sshd= executable must be specified, otherwise =sshd= refuses to start.
+     : /root/.guix-profile/sbin/sshd -d -f /root/.ssh/sshd_config
+** Gnome Desktop
+   To initialise the Gnome desktop I used the following operating system configuration
+   file =guixsd-my-system-config.scm=, which is mostly taken from the Guix manual 
+   [[https://www.gnu.org/software/guix/manual/html_nod/Using-the-Configuration-System.html][Using the Configuration System]].
+
+   #+BEGIN_SRC scheme
+     ;; This is an operating system configuration template
+     ;; for a "bare bones" setup, with no X11 display server.
+     ;;  see https://www.gnu.org/software/guix/manual/html_node/Using-the-Configuration-System.html
+
+     (use-modules (gnu) (gnu system nss))
+     (use-service-modules desktop)
+     (use-package-modules certs gnome)
+     ;; (use-service-modules networking ssh)
+     ;; (use-package-modules screen ssh)
+
+     (operating-system
+       (host-name "guixathens")
+       (timezone "Europe/Athens")
+       (locale "en_US.utf8")
+
+       ;; Assuming /dev/sdX is the target hard disk, and "my-root" is
+       ;; the label of the target root file system.
+       (bootloader (bootloader-configuration
+                     (bootloader grub-bootloader)
+                     (target "/dev/sda")))
+
+       (file-systems (cons (file-system
+                             (device "guix-root")
+                             (title 'label)
+                             (mount-point "/")
+                             (type "ext4"))
+                           ;; (file-system
+                           ;;   (device (uuid "2EAD-7AB8" 'fat))
+                           ;;   (title 'uuid)
+                           ;;   (mount-point "/boot/efi")
+                           ;;   (type "vfat"))
+                           %base-file-systems))
+
+       ;; This is where user accounts are specified.  The "root"
+       ;; account is implicit, and is initially created with the
+       ;; empty password.
+       (users (cons (user-account
+                     (name "deusmax")
+                     (comment "Deus Max")
+                     (group "users")
+
+                     ;; Adding the account to the "wheel" group
+                     ;; makes it a sudoer.  Adding it to "audio"
+                     ;; and "video" allows the user to play sound
+                     ;; and access the webcam.
+                     (supplementary-groups '("wheel" "netdev"
+                                             "audio" "video"))
+                     (home-directory "/home/dias"))
+                     %base-user-accounts))
+       ;; This is where we specify system-wide packages.
+       (packages (cons* nss-certs         ;for HTTPS access
+                        gvfs              ;for user mounts
+                        %base-packages))
+
+
+       ;; Add GNOME and/or Xfce---we can choose at the log-in
+       ;; screen with F1.  Use the "desktop" services, which
+       ;; include the X11 log-in service, networking with Wicd,
+       ;; and more.
+       (services (cons* (gnome-desktop-service)
+                        ;; (xfce-desktop-service)
+                        %desktop-services))
+
+       ;; Allow resolution of '.local' host names with mDNS.
+       (name-service-switch %mdns-host-lookup-nss))
+   #+END_SRC
+
+   Modify the file for your particular system (users, disk, etc.). Then run the
+   =reconfigure= system command action. After the system reboots, you will see the
+   beautiful GuixSD graphical login screen.
+   : guix system reconfigure guixsd-my-system-config.scm
+
+   Login as root and finally enjoy your GNOME experience ! While you're logged-in
+   as root, don't forget to give the user (in the sample above =deusmax=) a new password.
+   : passwd deusmax
+
+    
