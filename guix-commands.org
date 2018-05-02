@@ -1,0 +1,88 @@
+*** Guix Commands
+    Basic quick notes on the guix commands.
+**** Guix Package
+     Taken from [[https://www.gnu.org/software/guix/manual/html_node/Invoking-guix-package.html][Invoking guix package]]
+
+     #+NAME: tbl:guix-package-options-action
+     | Long         | Short                     | Comment                                     |
+     |--------------+---------------------------+---------------------------------------------|
+     | -i =package= | --install                 | Install the packages                        |
+     | -e =exp=     | --install-from-expression | Install from scheme exp                     |
+     | -f =file=    | --install-from-file       |                                             |
+     | -r =package= | --remove                  | Remove the packages                         |
+     | -u =regexp=  | --upgrade                 | Upgrade all installed packages              |
+     |              | --do-not-upgrade=regexp   |                                             |
+     |              | --roll-back               | Undo the last transaction                   |
+     | -S =pattern= | --switch-generation       | Switch to a generation defined by =pattern= |
+     |              | --search-paths[=kind]     | Report environmental variables needed       |
+     |              |                           | usage:                                      |
+     |              |                           | =eval \$(guix package --search-paths)=      |
+     | -p =profile= | --profile                 | Use =profile= instead of current user       |
+     |              | --verbose                 |                                             |
+     |              | --bootstrap               | Use bootstrap Guile to build                |
+     |--------------+---------------------------+---------------------------------------------|
+     |              |                           |                                             |
+
+     #+NAME: tbl:guix-package-options-query
+     | Short        | Long                 | Comment                        |
+     |--------------+----------------------+--------------------------------|
+     | -s =regexp=  | --search             | List packges that match regexp |
+     |              | --show=package       | Show details about package     |
+     | -I =regexp=  | --list-installed     | List installed packages        |
+     | -A =regexp=  | --list-available     | List available packages        |
+     | -l =pattern= | --list-generations   | List generations               |
+     | -d =pattern= | --delete-generations | Delete generations             |
+     |--------------+----------------------+--------------------------------|
+**** Guix Substitutes
+     Enable server authorization:
+     : guix archive --authorize < prefix/share/guix/hydra.gnu.org.pub
+
+     May also use =berlin.guixsd.org.pub=, instead of the hydra server.
+**** Guix GC
+     #+NAME: tbl:guix-gc
+     | Short | Long              | Comment                            |
+     |-------+-------------------+------------------------------------|
+     | -C    | --collect-garbage | default                            |
+     | -F    | --free-space      | CG until =free= space is available |
+     | -d    | --delete          | Attempt to delete all arguments    |
+     |       | --list-failures   | List cached build failures         |
+     |       | --clear-failures  | Clear failures                     |
+     |-------+-------------------+------------------------------------|
+     |       | --list-dead       | List unreachable                   |
+     |       | --list-live       | List reachable                     |
+     |       | --references      | query references                   |
+     |       | --referrers       | query referrers                    |
+     | -R    | --requisites      | query requisites                   |
+     |-------+-------------------+------------------------------------|
+     |       | --verify=opts     | verify integrity (contents,repair) |
+     |       | --optimize        | deduplicate                        |
+     |-------+-------------------+------------------------------------|
+**** Guix Pull
+     To update the distribution and the Guix tools you must run =guix pull=.
+     Long options (highlights) are:
+     - verbose :: verbose output
+     - branch  :: use branch from git repo
+     - url     :: use git repa art =url=.
+**** Guix Pack
+     The =guix pack= command creates a shrink-wrapped pack or software bundle. \\
+     For example to create a bundle containing Guile, Emacs, Geiser, and all their
+     dependencies, you can run:
+     : guix pack guile emacs geiser
+
+     To create an =/opt/gnu/bin= symlink:
+     : guix pack -S /opt/gnu/bin=bin guile emacs geiser
+**** Guix Archive
+     To export files from the store and to late import them. In particular, it
+     allows store files to be transferred from one machine to the store on another
+     machine.
+
+     To export store files as an archive to standard output, run: 
+     : guix archive --export options specifications..
+
+     Example:
+     : guix archive --export git:gui /gnu/store/...-emacs-24.3 > great.nar
+
+     To transfer the emacs package to a machine connected over SSH, one would run: 
+     : guix archive --export -r emacs | ssh the-machine guix archive --import
+
+     Place here a table of options .
